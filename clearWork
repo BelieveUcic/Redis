@@ -1,0 +1,39 @@
+<?php
+//启动curl
+$host = "HOST";
+ $ch = curl_init();
+curl_setopt($ch,CURLOPT_URL,$host.'/b.php');
+curl_setopt($ch,CURLOPT_RETURNTRANSFER,1);
+//curl连接等待1s (最少为1秒)
+curl_setopt($ch,CURLOPT_TIMEOUT,1);
+curl_exec($ch);
+curl_close($ch);
+/****请求后不等待返回值***/
+?>
+
+b.php
+<?php
+$redis = new Redis('127.0.0.1',6379);
+//$redis -> set('lock',0);  lock 默认开始为0
+if($redis -> get('lock') == 0){
+	$redis -> set('local',1);
+	do {
+		//业务逻辑
+		$works = Db::name('work') -> where(['type'=>1]) -> select();
+		if($works !== null){
+			foreach($works as $work){
+				//DO SOMETHING
+				Db::name('work') -> update(['type' => 2]);
+			}
+			//每次循环执行完，休眠两秒继续执行,知道任务执行完成
+			sleep(2);
+		}else{
+			//为空即任务处理完毕
+			$redis ->set('lock',0); //解锁
+		}
+		
+	} while($redis -> get('local') == 1);
+}esle{
+	//只允许一个死循环任务
+	return false;
+}
